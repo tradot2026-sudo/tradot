@@ -33,6 +33,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json(updated);
   }
 
+  // Handle Fund Status Update
+  if (body.fundStatus !== undefined) {
+    const updated = await prisma.payout.update({
+      where: { id },
+      data: {
+        fundStatus: body.fundStatus || null,
+        fundStatusDate: body.fundStatus ? new Date().toISOString().split('T')[0] : null,
+      },
+    });
+    return NextResponse.json(updated);
+  }
+
   const inputPaidAmount = parseFloat(body.paidAmount || '0');
   const paymentDate = body.paymentDate || null;
   const modeOfPayment = body.modeOfPayment || null;

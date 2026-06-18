@@ -77,6 +77,8 @@ model Payout {
   status          String   @default("pending") // pending | partial | paid | overdue | waived
   notes           String?
   payoutNumber    Int?
+  fundStatus      String?   // null | "withdrawal_requested" | "credited"
+  fundStatusDate  String?   // ISO date when fund status was last changed
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

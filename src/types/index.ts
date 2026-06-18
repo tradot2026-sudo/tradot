@@ -4,6 +4,7 @@ export type PayoutFrequency = 'daily' | 'weekly' | 'monthly';
 export type PlanStatus = 'active' | 'paused' | 'completed' | 'cancelled';
 export type PaymentMode = 'cash' | 'bank_transfer' | 'upi' | 'cheque' | 'other';
 export type PayoutStatus = 'pending' | 'partial' | 'paid' | 'overdue' | 'waived';
+export type FundStatus = 'withdrawal_requested' | 'credited';
 
 export interface Client {
   id: string;
@@ -56,6 +57,8 @@ export interface Payout {
   status: PayoutStatus;
   notes?: string;
   payoutNumber?: number;
+  fundStatus?: FundStatus | null;
+  fundStatusDate?: string | null;
   createdAt: string;
   updatedAt: string;
   // Joined

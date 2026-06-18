@@ -6,13 +6,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import {
   LayoutDashboard, Users, CreditCard, BarChart3,
-  TrendingUp, LogOut, Menu, ChevronRight
+  TrendingUp, LogOut, Menu, ChevronRight, Wallet
 } from 'lucide-react';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/clients', label: 'Clients', icon: Users },
   { href: '/dashboard/payouts', label: 'Payouts', icon: CreditCard },
+  { href: '/dashboard/fund-tracker', label: 'Fund Tracker', icon: Wallet },
   { href: '/dashboard/reports', label: 'Reports', icon: BarChart3 },
 ];
 
