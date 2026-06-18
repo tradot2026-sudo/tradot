@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ id: user.id, email: user.email }, { status: 201 });
   } catch (err) {
+    console.error('Registration error:', err);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
