@@ -10,10 +10,10 @@ import {
 } from 'lucide-react';
 
 const navItems = [
+  { href: '/dashboard/fund-tracker', label: 'Fund Tracker', icon: Wallet },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/clients', label: 'Clients', icon: Users },
   { href: '/dashboard/payouts', label: 'Payouts', icon: CreditCard },
-  { href: '/dashboard/fund-tracker', label: 'Fund Tracker', icon: Wallet },
   { href: '/dashboard/reports', label: 'Reports', icon: BarChart3 },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
