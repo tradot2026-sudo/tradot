@@ -1,0 +1,76 @@
+// Tradot — Prisma Schema
+// Local: SQLite  |  Production: change provider to "postgresql" and update DATABASE_URL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  clients   Client[]
+  plans     Plan[]
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  createdBy String
+  user      User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  plans     Plan[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Plan {
+  id                  String    @id @default(cuid())
+  clientId            String
+  client              Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  planName            String
+  principalAmount     Float
+  payoutType          String    @default("monthly") // daily | weekly | monthly
+  payoutAmount        Float?
+  payoutPercentage    Float?
+  startDate           String    // ISO date string YYYY-MM-DD
+  maturityDate        String?
+  durationMonths      Int?
+  totalPayouts        Int?
+  defaultPaymentMode  String    @default("cash") // cash | bank_transfer | upi | cheque | other
+  status              String    @default("active") // active | paused | completed | cancelled
+  notes               String?
+  createdBy           String
+  user                User      @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  payouts             Payout[]
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model Payout {
+  id              String   @id @default(cuid())
+  planId          String
+  plan            Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  dueDate         String   // ISO date string YYYY-MM-DD
+  expectedAmount  Float
+  paidAmount      Float    @default(0)
+  paymentDate     String?
+  modeOfPayment   String?
+  referenceNo     String?
+  status          String   @default("pending") // pending | partial | paid | overdue | waived
+  notes           String?
+  payoutNumber    Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
