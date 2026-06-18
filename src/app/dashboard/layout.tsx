@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import {
   LayoutDashboard, Users, CreditCard, BarChart3,
-  TrendingUp, LogOut, Menu, ChevronRight, Wallet
+  TrendingUp, LogOut, Menu, ChevronRight, Wallet, Settings
 } from 'lucide-react';
 
 const navItems = [
@@ -15,6 +15,7 @@ const navItems = [
   { href: '/dashboard/payouts', label: 'Payouts', icon: CreditCard },
   { href: '/dashboard/fund-tracker', label: 'Fund Tracker', icon: Wallet },
   { href: '/dashboard/reports', label: 'Reports', icon: BarChart3 },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
