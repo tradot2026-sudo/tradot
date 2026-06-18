@@ -21,7 +21,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     where: { id, createdBy: userId },
     include: {
       client: true,
-      payouts: { orderBy: { dueDate: 'asc' } },
+      payouts: {
+        orderBy: { dueDate: 'asc' },
+        include: { transactions: { orderBy: { createdAt: 'desc' } } },
+      },
     },
   });
 

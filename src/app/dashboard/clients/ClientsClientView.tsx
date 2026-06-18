@@ -4,9 +4,10 @@ import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { Users, Plus, Search, Phone, Mail, ArrowRight, Edit2, Trash2, X, AlertCircle } from 'lucide-react';
+import { Users, Plus, Search, Phone, Mail, ArrowRight, Edit2, Trash2, X, AlertCircle, Upload, CheckCircle2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import type { Client } from '@/types';
+import Papa from 'papaparse';
 
 interface ClientForm {
   name: string;
@@ -34,6 +35,71 @@ export default function ClientsClientView({ initialClients }: { initialClients: 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  // Bulk CSV Import State
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [parsedRows, setParsedRows] = useState<any[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState('');
+  const [importResult, setImportResult] = useState<{
+    clientsCreated: number;
+    plansCreated: number;
+    payoutsCreated: number;
+    errors: string[];
+  } | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvFile(file);
+    setImportError('');
+    setImportResult(null);
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        setParsedRows(results.data);
+      },
+      error: (err) => {
+        setImportError(`Failed to parse CSV: ${err.message}`);
+      }
+    });
+  };
+
+  const handleImportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (parsedRows.length === 0) return;
+    setImporting(true);
+    setImportError('');
+    setImportResult(null);
+
+    try {
+      const res = await api.post<{
+        success: boolean;
+        results: {
+          clientsCreated: number;
+          plansCreated: number;
+          payoutsCreated: number;
+          errors: string[];
+        }
+      }>('/api/clients/bulk', { rows: parsedRows });
+
+      if (res.success) {
+        setImportResult(res.results);
+        startTransition(() => {
+          router.refresh();
+        });
+      } else {
+        setImportError('Import failed');
+      }
+    } catch (err: any) {
+      setImportError(err.message || 'Server error occurred during import.');
+    } finally {
+      setImporting(false);
+    }
+  };
 
   // Keep state synchronized with server data changes
   useEffect(() => {
@@ -96,9 +162,14 @@ export default function ClientsClientView({ initialClients }: { initialClients: 
           <h1 className="page-title">Clients</h1>
           <p className="page-subtitle">{clients.length} client{clients.length !== 1 ? 's' : ''} registered</p>
         </div>
-        <button id="add-client-btn" onClick={openAdd} className="btn btn-primary" style={{ opacity: isPending ? 0.7 : 1 }}>
-          <Plus size={18} /> Add Client
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button onClick={() => { setShowImportModal(true); setCsvFile(null); setParsedRows([]); setImportResult(null); setImportError(''); }} className="btn btn-secondary" style={{ opacity: isPending ? 0.7 : 1 }}>
+            <Upload size={16} /> Bulk Import CSV
+          </button>
+          <button id="add-client-btn" onClick={openAdd} className="btn btn-primary" style={{ opacity: isPending ? 0.7 : 1 }}>
+            <Plus size={18} /> Add Client
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -270,6 +341,169 @@ export default function ClientsClientView({ initialClients }: { initialClients: 
                 <button onClick={() => setDeleteId(null)} className="btn btn-secondary">Cancel</button>
                 <button onClick={() => handleDelete(deleteId)} className="btn btn-danger">Delete</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk CSV Import Modal */}
+      {showImportModal && (
+        <div className="modal-overlay" onClick={() => setShowImportModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '750px' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '24px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontWeight: 700, color: 'white', fontSize: '1.1rem', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                Bulk Import Clients & Plans
+              </h2>
+              <button onClick={() => setShowImportModal(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div style={{ padding: '20px 24px 24px' }}>
+              {!importResult ? (
+                <form onSubmit={handleImportSubmit}>
+                  <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', lineHeight: 1.5, marginBottom: '16px' }}>
+                    Upload a CSV file containing columns for client registration and optional payout plans. 
+                    If client names match existing records (case-insensitive), their details will be updated and plans appended.
+                  </p>
+
+                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '20px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>
+                    <strong>Expected CSV Columns:</strong>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px', marginTop: '6px', fontFamily: 'monospace' }}>
+                      <span>client_name *</span>
+                      <span>client_phone</span>
+                      <span>client_email</span>
+                      <span>client_address</span>
+                      <span>plan_name</span>
+                      <span>principal_amount</span>
+                      <span>payout_frequency</span>
+                      <span>payout_percentage</span>
+                      <span>payout_amount</span>
+                      <span>start_date</span>
+                      <span>duration_months</span>
+                      <span>payment_mode</span>
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '20px' }}>
+                    <label
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '24px',
+                        border: '2px dashed rgba(255,255,255,0.1)',
+                        borderRadius: '12px',
+                        background: 'rgba(255,255,255,0.01)',
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                      }}
+                    >
+                      <Upload size={28} color="rgba(255,255,255,0.4)" style={{ marginBottom: '10px' }} />
+                      <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
+                        {csvFile ? csvFile.name : 'Click to select CSV file'}
+                      </span>
+                      {csvFile && (
+                        <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>
+                          ({parsedRows.length} rows parsed)
+                        </span>
+                      )}
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={handleFileChange}
+                        style={{ display: 'none' }}
+                        required
+                      />
+                    </label>
+                  </div>
+
+                  {importError && (
+                    <div className="alert alert-danger" style={{ marginBottom: '20px' }}>
+                      <AlertCircle size={16} />
+                      <span>{importError}</span>
+                    </div>
+                  )}
+
+                  {parsedRows.length > 0 && (
+                    <div style={{ marginBottom: '20px' }}>
+                      <label className="form-label" style={{ fontWeight: 600 }}>Data Preview (First 5 Rows)</label>
+                      <div className="table-container" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                        <table style={{ fontSize: '0.75rem' }}>
+                          <thead>
+                            <tr>
+                              <th>Client Name</th>
+                              <th>Phone</th>
+                              <th>Plan</th>
+                              <th>Principal</th>
+                              <th>Start Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {parsedRows.slice(0, 5).map((row, idx) => (
+                              <tr key={idx}>
+                                <td style={{ fontWeight: 600 }}>{row.client_name || row.clientName || row.name || '—'}</td>
+                                <td>{row.client_phone || row.clientPhone || row.phone || '—'}</td>
+                                <td>{row.plan_name || row.planName || '—'}</td>
+                                <td>{row.principal_amount || row.principalAmount || row.principal || '—'}</td>
+                                <td>{row.start_date || row.startDate || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                    <button type="button" onClick={() => setShowImportModal(false)} className="btn btn-secondary">Cancel</button>
+                    <button type="submit" className="btn btn-primary" disabled={importing || parsedRows.length === 0}>
+                      {importing ? 'Importing...' : `Import ${parsedRows.length} Records`}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                  <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(16,185,129,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                    <CheckCircle2 size={32} color="#34d399" />
+                  </div>
+                  <h3 style={{ color: 'white', fontWeight: 700, fontSize: '1.2rem', marginBottom: '8px' }}>Import Complete!</h3>
+                  <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', marginBottom: '20px' }}>
+                    CSV file has been processed successfully. Here is the summary:
+                  </p>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', maxWidth: '480px', margin: '0 auto 24px' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#6366f1' }}>{importResult.clientsCreated}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>Clients Added</div>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#10b981' }}>{importResult.plansCreated}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>Plans Created</div>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fbbf24' }}>{importResult.payoutsCreated}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>Payouts Scheduled</div>
+                    </div>
+                  </div>
+
+                  {importResult.errors.length > 0 && (
+                    <div style={{ textAlign: 'left', marginBottom: '24px' }}>
+                      <label className="form-label" style={{ fontWeight: 600, color: '#ef4444' }}>Warnings / Skipped Rows ({importResult.errors.length})</label>
+                      <div style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '8px', padding: '12px 16px', maxHeight: '150px', overflowY: 'auto', fontSize: '0.75rem', color: '#fca5a5', lineHeight: 1.5 }}>
+                        {importResult.errors.map((err, i) => (
+                          <div key={i} style={{ marginBottom: '4px' }}>⚠️ {err}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <button onClick={() => { setShowImportModal(false); setCsvFile(null); setParsedRows([]); setImportResult(null); }} className="btn btn-primary" style={{ minWidth: '120px' }}>
+                    Done
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

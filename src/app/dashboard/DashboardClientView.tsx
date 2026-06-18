@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Users, AlertCircle, Clock, CheckCircle2,
@@ -8,6 +9,10 @@ import {
 import { formatCurrency, formatDate } from '@/lib/utils';
 import type { Payout, Client, Plan } from '@/types';
 import { format } from 'date-fns';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, PieChart, Pie, Cell, Legend
+} from 'recharts';
 
 interface DashboardData {
   totalClients: number;
@@ -18,6 +23,8 @@ interface DashboardData {
   overduePayouts: Payout[];
   upcomingPayouts: Payout[];
   recentClients: Client[];
+  maturingPlans?: (Plan & { client?: Client })[];
+  yearlyPayouts?: { dueDate: string; expectedAmount: number; paidAmount: number; status: string }[];
 }
 
 function StatCard({
@@ -106,6 +113,51 @@ export default function DashboardClientView({ data }: { data: DashboardData }) {
   const overdueAmount = data.overduePayouts.reduce((s, p) => s + (p.expectedAmount - (p.paidAmount || 0)), 0);
   const dueTodayAmount = data.dueTodayPayouts.reduce((s, p) => s + (p.expectedAmount - (p.paidAmount || 0)), 0);
 
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Process monthly data for area chart
+  const monthlyData = Array.from({ length: 12 }, (_, i) => {
+    const monthLabel = format(new Date(2026, i, 1), 'MMM');
+    return { month: monthLabel, Expected: 0, Paid: 0 };
+  });
+
+  if (data.yearlyPayouts) {
+    data.yearlyPayouts.forEach(p => {
+      try {
+        const parts = p.dueDate.split('-');
+        const m = parseInt(parts[1], 10) - 1; // 0-indexed
+        if (m >= 0 && m < 12) {
+          monthlyData[m].Expected += p.expectedAmount;
+          monthlyData[m].Paid += p.paidAmount;
+        }
+      } catch (e) {
+        console.error('Failed to parse date for payout', p.dueDate, e);
+      }
+    });
+  }
+
+  // Process pie data
+  const statusCounts = { paid: 0, partial: 0, overdue: 0, pending: 0, waived: 0 };
+  if (data.yearlyPayouts) {
+    data.yearlyPayouts.forEach(p => {
+      const status = p.status;
+      if (status in statusCounts) {
+        statusCounts[status as keyof typeof statusCounts]++;
+      }
+    });
+  }
+
+  const pieData = [
+    { name: 'Paid', value: statusCounts.paid, color: '#34d399' },
+    { name: 'Partial', value: statusCounts.partial, color: '#fbbf24' },
+    { name: 'Overdue', value: statusCounts.overdue, color: '#f87171' },
+    { name: 'Pending', value: statusCounts.pending, color: '#94a3b8' },
+    { name: 'Waived', value: statusCounts.waived, color: '#a78bfa' },
+  ].filter(d => d.value > 0);
+
   return (
     <div style={{ padding: '32px', maxWidth: '1400px' }}>
       {/* Header */}
@@ -126,6 +178,21 @@ export default function DashboardClientView({ data }: { data: DashboardData }) {
           <Link href="/dashboard/payouts?filter=overdue" style={{ marginLeft: 'auto', color: '#fca5a5', textDecoration: 'none', fontSize: '0.85rem', whiteSpace: 'nowrap', fontWeight: 600 }}>
             View all →
           </Link>
+        </div>
+      )}
+
+      {/* Maturing Plans Alert */}
+      {data.maturingPlans && data.maturingPlans.length > 0 && (
+        <div className="alert alert-warning" style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.2)' }}>
+          <Clock size={18} color="#fbbf24" style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>
+            <strong>🎓 {data.maturingPlans.length} investment plan{data.maturingPlans.length > 1 ? 's' : ''} maturing within 30 days.</strong> Roll over active balances to extend cycles.
+          </span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Link href={`/dashboard/plans/${data.maturingPlans[0].id}?rollover=true`} className="btn btn-primary btn-sm" style={{ background: '#fbbf24', borderColor: '#fbbf24', color: '#0d1426', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              Roll Over Plan
+            </Link>
+          </div>
         </div>
       )}
 
@@ -180,6 +247,79 @@ export default function DashboardClientView({ data }: { data: DashboardData }) {
           </div>
         </Link>
       </div>
+
+      {/* Visual Charts */}
+      {isMounted && data.yearlyPayouts && data.yearlyPayouts.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', marginBottom: '28px' }} className="charts-grid">
+          {/* Cash Flow */}
+          <div className="glass-card" style={{ padding: '24px' }}>
+            <h3 style={{ fontWeight: 700, color: 'white', fontSize: '0.95rem', marginBottom: '20px', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+              Cash Flow Forecast (Expected vs. Paid Payouts)
+            </h3>
+            <div style={{ width: '100%', height: '300px' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorExpected" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.15}/>
+                      <stop offset="95%" stopColor="#fbbf24" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorPaid" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                  <XAxis dataKey="month" stroke="rgba(255,255,255,0.3)" fontSize={10} tickLine={false} />
+                  <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} tickLine={false} tickFormatter={(val) => `₹${val/1000}k`} />
+                  <Tooltip 
+                    contentStyle={{ background: 'rgba(13,20,38,0.98)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', borderRadius: '8px', fontSize: '0.8rem' }} 
+                    formatter={(val: any) => [formatCurrency(Number(val) || 0), '']}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)', paddingTop: '10px' }} />
+                  <Area type="monotone" dataKey="Expected" stroke="#fbbf24" strokeWidth={2} fillOpacity={1} fill="url(#colorExpected)" name="Expected Payouts" />
+                  <Area type="monotone" dataKey="Paid" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorPaid)" name="Actual Disbursed" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Status Breakdown */}
+          <div className="glass-card" style={{ padding: '24px' }}>
+            <h3 style={{ fontWeight: 700, color: 'white', fontSize: '0.95rem', marginBottom: '20px', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+              Installments Status Dispersal
+            </h3>
+            <div style={{ width: '100%', height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="45%"
+                    innerRadius={60}
+                    outerRadius={85}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [`${value} Payouts`, 'Count']} contentStyle={{ background: 'rgba(13,20,38,0.98)', border: '1px solid rgba(255,255,255,0.08)', color: 'white', borderRadius: '8px', fontSize: '0.8rem' }} />
+                  <Legend layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isMounted && (
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', marginBottom: '28px' }} className="charts-grid">
+          <div className="glass-card shimmer" style={{ height: '350px' }} />
+          <div className="glass-card shimmer" style={{ height: '350px' }} />
+        </div>
+      )}
 
       {/* Content Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
@@ -301,7 +441,8 @@ export default function DashboardClientView({ data }: { data: DashboardData }) {
 
       <style>{`
         @media (max-width: 900px) {
-          div[style*="grid-template-columns: 1fr 1fr"] {
+          div[style*="grid-template-columns: 1fr 1fr"],
+          .charts-grid {
             grid-template-columns: 1fr !important;
           }
         }

@@ -16,6 +16,9 @@ export default async function DashboardPage() {
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const weekAhead = format(addDays(new Date(), 7), 'yyyy-MM-dd');
+  const thirtyDaysAhead = format(addDays(new Date(), 30), 'yyyy-MM-dd');
+  const startOfYearStr = `${new Date().getFullYear()}-01-01`;
+  const endOfYearStr = `${new Date().getFullYear()}-12-31`;
 
   const [
     totalClients,
@@ -25,6 +28,8 @@ export default async function DashboardPage() {
     upcomingPayouts,
     recentClients,
     paidPayouts,
+    maturingPlans,
+    yearlyPayouts,
   ] = await Promise.all([
     prisma.client.count({ where: { createdBy: userId } }),
     prisma.plan.findMany({ where: { createdBy: userId }, select: { principalAmount: true, status: true } }),
@@ -55,6 +60,27 @@ export default async function DashboardPage() {
       where: { status: { in: ['paid', 'partial'] }, plan: { createdBy: userId } },
       select: { paidAmount: true },
     }),
+    prisma.plan.findMany({
+      where: {
+        createdBy: userId,
+        status: 'active',
+        maturityDate: { gte: todayStr, lte: thirtyDaysAhead }
+      },
+      include: { client: true },
+      orderBy: { maturityDate: 'asc' }
+    }),
+    prisma.payout.findMany({
+      where: {
+        dueDate: { gte: startOfYearStr, lte: endOfYearStr },
+        plan: { createdBy: userId }
+      },
+      select: {
+        dueDate: true,
+        expectedAmount: true,
+        paidAmount: true,
+        status: true
+      }
+    })
   ]);
 
   const serializePayout = (p: any) => ({
@@ -115,6 +141,28 @@ export default async function DashboardPage() {
     updatedAt: c.updatedAt.toISOString(),
   });
 
+  const serializePlan = (p: any) => ({
+    id: p.id,
+    clientId: p.clientId,
+    planName: p.planName,
+    principalAmount: p.principalAmount,
+    payoutType: p.payoutType,
+    payoutAmount: p.payoutAmount ?? undefined,
+    payoutPercentage: p.payoutPercentage ?? undefined,
+    startDate: p.startDate,
+    maturityDate: p.maturityDate ?? undefined,
+    durationMonths: p.durationMonths ?? undefined,
+    totalPayouts: p.totalPayouts ?? undefined,
+    defaultPaymentMode: p.defaultPaymentMode,
+    payoutDay: p.payoutDay ?? undefined,
+    status: p.status,
+    notes: p.notes ?? undefined,
+    createdBy: p.createdBy,
+    createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
+    client: p.client ? serializeClient(p.client) : undefined
+  });
+
   const dashboardData = {
     totalClients,
     totalInvested: plans.reduce((s, p) => s + p.principalAmount, 0),
@@ -124,6 +172,8 @@ export default async function DashboardPage() {
     overduePayouts: overduePayouts.map(serializePayout),
     upcomingPayouts: upcomingPayouts.map(serializePayout),
     recentClients: recentClients.map(serializeClient),
+    maturingPlans: maturingPlans.map(serializePlan),
+    yearlyPayouts: yearlyPayouts,
   };
 
   return <DashboardClientView data={dashboardData} />;

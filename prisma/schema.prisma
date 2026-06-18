@@ -12,13 +12,15 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String?
-  createdAt DateTime @default(now())
-  clients   Client[]
-  plans     Plan[]
+  id                       String   @id @default(cuid())
+  email                    String   @unique
+  password                 String
+  name                     String?
+  createdAt                DateTime @default(now())
+  clients                  Client[]
+  plans                    Plan[]
+  whatsappTemplatePaid     String?
+  whatsappTemplateReminder String?
 }
 
 model Client {
@@ -79,9 +81,25 @@ model Payout {
   payoutNumber    Int?
   fundStatus      String?   // null | "withdrawal_requested" | "credited"
   fundStatusDate  String?   // ISO date when fund status was last changed
+  transactions    PaymentTransaction[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@index([planId])
   @@index([dueDate])
+}
+
+model PaymentTransaction {
+  id            String   @id @default(cuid())
+  payoutId      String
+  payout        Payout   @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  amountPaid    Float
+  paymentDate   String   // YYYY-MM-DD
+  modeOfPayment String   // cash | bank_transfer | upi | cheque | other
+  referenceNo   String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([payoutId])
 }

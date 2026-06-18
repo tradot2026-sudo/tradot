@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import {
@@ -37,6 +37,98 @@ export default function PlanDetailPage() {
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'paid' | 'overdue' | 'partial'>('all');
 
+  // Plan Rollover State
+  const [showRolloverModal, setShowRolloverModal] = useState(false);
+  const [rolloverForm, setRolloverForm] = useState({
+    planName: '', principalAmount: '', payoutType: 'monthly',
+    payoutAmount: '', payoutPercentage: '', usePercentage: false,
+    startDate: '', durationMonths: '', payoutDay: '',
+    defaultPaymentMode: 'cash', notes: '',
+  });
+  const [rollingOver, setRollingOver] = useState(false);
+  const [rolloverError, setRolloverError] = useState('');
+
+  const openRollover = () => {
+    if (!plan) return;
+    setRolloverForm({
+      planName: `Renewed - ${plan.planName}`,
+      principalAmount: String(plan.principalAmount),
+      payoutType: plan.payoutType,
+      payoutAmount: String(plan.payoutAmount || ''),
+      payoutPercentage: plan.payoutPercentage ? String(plan.payoutPercentage * 100) : '',
+      usePercentage: !!plan.payoutPercentage,
+      startDate: plan.maturityDate || today(),
+      durationMonths: plan.durationMonths ? String(plan.durationMonths) : '12',
+      payoutDay: plan.payoutDay ? String(plan.payoutDay) : '',
+      defaultPaymentMode: plan.defaultPaymentMode,
+      notes: `Rollover renewal of plan "${plan.planName}"`,
+    });
+    setRolloverError('');
+    setShowRolloverModal(true);
+  };
+
+  const updateRolloverForm = (updates: Partial<typeof rolloverForm>) => {
+    const newForm = { ...rolloverForm, ...updates };
+    if (newForm.usePercentage && newForm.principalAmount && newForm.payoutPercentage) {
+      const pct = parseFloat(newForm.payoutPercentage) / 100;
+      newForm.payoutAmount = (parseFloat(newForm.principalAmount) * pct).toFixed(2);
+    }
+    setRolloverForm(newForm);
+  };
+
+  const handleRolloverSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRollingOver(true);
+    setRolloverError('');
+
+    const principalAmount = parseFloat(rolloverForm.principalAmount);
+    let payoutAmount = parseFloat(rolloverForm.payoutAmount);
+    let payoutPercentage = null;
+
+    if (rolloverForm.usePercentage && rolloverForm.payoutPercentage) {
+      payoutPercentage = parseFloat(rolloverForm.payoutPercentage);
+      payoutAmount = principalAmount * (payoutPercentage / 100);
+    }
+
+    const rolloverData = {
+      planName: rolloverForm.planName,
+      principalAmount,
+      payoutType: rolloverForm.payoutType,
+      payoutAmount,
+      payoutPercentage,
+      startDate: rolloverForm.startDate,
+      durationMonths: rolloverForm.durationMonths ? parseInt(rolloverForm.durationMonths) : null,
+      payoutDay: rolloverForm.payoutType === 'monthly' && rolloverForm.payoutDay ? parseInt(rolloverForm.payoutDay) : null,
+      defaultPaymentMode: rolloverForm.defaultPaymentMode,
+      notes: rolloverForm.notes,
+    };
+
+    try {
+      const newPlan = await api.post<{ id: string }>(`/api/plans/${planId}/rollover`, rolloverData);
+      setShowRolloverModal(false);
+      window.location.href = `/dashboard/plans/${newPlan.id}`;
+    } catch (err: any) {
+      setRolloverError(err.message || 'Failed to roll over plan.');
+    } finally {
+      setRollingOver(false);
+    }
+  };
+
+  const [whatsappTemplates, setWhatsappTemplates] = useState<{ whatsappTemplatePaid: string | null; whatsappTemplateReminder: string | null } | null>(null);
+
+  const compileTemplate = (template: string, payout: Payout) => {
+    const client = plan?.client;
+    return template
+      .replace(/{client_name}/g, client?.name || '')
+      .replace(/{plan_name}/g, plan?.planName || '')
+      .replace(/{payout_amount}/g, formatCurrency(payout.expectedAmount))
+      .replace(/{due_date}/g, payout.dueDate ? formatDate(payout.dueDate) : '')
+      .replace(/{payout_number}/g, payout.payoutNumber ? String(payout.payoutNumber) : '')
+      .replace(/{payment_date}/g, payout.paymentDate ? formatDate(payout.paymentDate) : '')
+      .replace(/{payment_mode}/g, payout.modeOfPayment ? getPaymentModeLabel(payout.modeOfPayment) : '')
+      .replace(/{reference_no}/g, payout.referenceNo || 'N/A');
+  };
+
   const sendWhatsAppNotification = (payout: Payout) => {
     const client = plan?.client;
     if (!client || !client.phone) {
@@ -49,9 +141,19 @@ export default function PlanDetailPage() {
     
     let message = '';
     if (payout.status === 'paid') {
-      message = `Hello ${client.name},\n\nWe have successfully processed your payout of ${formattedAmount} for the investment "${plan.planName}".\n\nTransaction Details:\n- Date: ${payout.paymentDate ? formatDate(payout.paymentDate) : 'N/A'}\n- Mode: ${payout.modeOfPayment ? getPaymentModeLabel(payout.modeOfPayment) : 'N/A'}\n- Reference No: ${payout.referenceNo || 'N/A'}\n\nThank you for investing with us!\n- Tradot`;
+      const customTemplate = whatsappTemplates?.whatsappTemplatePaid;
+      if (customTemplate) {
+        message = compileTemplate(customTemplate, payout);
+      } else {
+        message = `Hello ${client.name},\n\nWe have successfully processed your payout of ${formattedAmount} for the investment "${plan.planName}".\n\nTransaction Details:\n- Date: ${payout.paymentDate ? formatDate(payout.paymentDate) : 'N/A'}\n- Mode: ${payout.modeOfPayment ? getPaymentModeLabel(payout.modeOfPayment) : 'N/A'}\n- Reference No: ${payout.referenceNo || 'N/A'}\n\nThank you for investing with us!\n- Tradot`;
+      }
     } else {
-      message = `Hello ${client.name},\n\nThis is a friendly reminder that a payout of ${formattedAmount} for your investment "${plan.planName}" is scheduled for ${formatDate(payout.dueDate)}.\n\nThank you,\n- Tradot`;
+      const customTemplate = whatsappTemplates?.whatsappTemplateReminder;
+      if (customTemplate) {
+        message = compileTemplate(customTemplate, payout);
+      } else {
+        message = `Hello ${client.name},\n\nThis is a friendly reminder that a payout of ${formattedAmount} for your investment "${plan.planName}" is scheduled for ${formatDate(payout.dueDate)}.\n\nThank you,\n- Tradot`;
+      }
     }
 
     const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
@@ -300,7 +402,27 @@ export default function PlanDetailPage() {
     }
   }, [planId]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const fetchTemplates = useCallback(async () => {
+    try {
+      const res = await api.get<{ whatsappTemplatePaid: string | null; whatsappTemplateReminder: string | null }>('/api/settings/templates');
+      setWhatsappTemplates(res);
+    } catch (err) {
+      console.error('Failed to fetch templates:', err);
+    }
+  }, []);
+
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    fetchData();
+    fetchTemplates();
+  }, [fetchData, fetchTemplates]);
+
+  useEffect(() => {
+    if (searchParams.get('rollover') === 'true' && plan) {
+      openRollover();
+    }
+  }, [searchParams, plan]);
 
   const openPayment = (payout: Payout) => {
     setActivePayoutId(payout.id);
@@ -383,6 +505,19 @@ export default function PlanDetailPage() {
       >
         <ArrowLeft size={16} /> {plan.client?.name || 'Client'}
       </Link>
+
+      {/* Plan Mature Alert */}
+      {plan.status === 'active' && plan.maturityDate && plan.maturityDate <= today() && (
+        <div className="alert alert-warning" style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <AlertCircle size={20} />
+          <span style={{ flex: 1 }}>
+            <strong>🎓 This plan matured on {formatDate(plan.maturityDate)}.</strong> Select Roll Over to transition this investment to a new payout cycle.
+          </span>
+          <button onClick={openRollover} className="btn btn-primary btn-sm" style={{ background: '#f59e0b', borderColor: '#d97706', color: 'white' }}>
+            Roll Over Plan
+          </button>
+        </div>
+      )}
 
       {/* Plan Header */}
       <div className="glass-card" style={{ padding: '28px', marginBottom: '24px' }}>
@@ -524,6 +659,18 @@ export default function PlanDetailPage() {
                       </>
                     ) : (
                       <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>
+                    )}
+
+                    {/* Transaction history log */}
+                    {(payout as any).transactions && (payout as any).transactions.length > 0 && (
+                      <div style={{ marginTop: '8px', padding: '6px 8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '0.7rem', width: 'max-content' }}>
+                        <div style={{ fontWeight: 600, color: 'rgba(255,255,255,0.4)', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '3px', marginBottom: '3px' }}>Ledger logs:</div>
+                        {(payout as any).transactions.map((tx: any) => (
+                          <div key={tx.id} style={{ color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>
+                            • {formatCurrency(tx.amountPaid)} on {formatDate(tx.paymentDate)} via {getPaymentModeLabel(tx.modeOfPayment)}
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </td>
                   <td style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>
@@ -707,6 +854,115 @@ export default function PlanDetailPage() {
                 </form>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Rollover Modal */}
+      {showRolloverModal && (
+        <div className="modal-overlay" onClick={() => setShowRolloverModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '600px' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '24px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontWeight: 700, color: 'white', fontSize: '1.1rem', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                Roll Over Plan
+              </h2>
+              <button onClick={() => setShowRolloverModal(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleRolloverSubmit} style={{ padding: '20px 24px 24px' }}>
+              {rolloverError && <div className="alert alert-danger" style={{ marginBottom: '16px' }}><AlertCircle size={16} /><span>{rolloverError}</span></div>}
+
+              <div style={{ display: 'grid', gap: '16px' }}>
+                <div>
+                  <label className="form-label">New Plan Name *</label>
+                  <input className="form-input" value={rolloverForm.planName} onChange={e => updateRolloverForm({ planName: e.target.value })} required />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label className="form-label">Rollover Principal (₹) *</label>
+                    <input className="form-input" type="number" min="1" step="0.01" value={rolloverForm.principalAmount} onChange={e => updateRolloverForm({ principalAmount: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="form-label">Payout Frequency *</label>
+                    <select className="form-input" value={rolloverForm.payoutType} onChange={e => updateRolloverForm({ payoutType: e.target.value as any })}>
+                      <option value="monthly">Monthly</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="daily">Daily</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '10px' }}>
+                    <label className="form-label" style={{ margin: 0 }}>Payout Amount</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={rolloverForm.usePercentage} onChange={e => updateRolloverForm({ usePercentage: e.target.checked })} />
+                      Use % of principal
+                    </label>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: rolloverForm.usePercentage ? '1fr 1fr' : '1fr', gap: '12px' }}>
+                    {rolloverForm.usePercentage && (
+                      <div>
+                        <input className="form-input" type="number" min="0" max="100" step="0.01" value={rolloverForm.payoutPercentage} onChange={e => updateRolloverForm({ payoutPercentage: e.target.value })} placeholder="Percentage" />
+                      </div>
+                    )}
+                    <div>
+                      <input className="form-input" type="number" min="0" step="0.01" value={rolloverForm.payoutAmount} onChange={e => updateRolloverForm({ payoutAmount: e.target.value })} placeholder="Payout amount ₹" readOnly={rolloverForm.usePercentage} />
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label className="form-label">Start Date *</label>
+                    <input className="form-input" type="date" value={rolloverForm.startDate} onChange={e => updateRolloverForm({ startDate: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="form-label">Duration (months) *</label>
+                    <input className="form-input" type="number" min="1" value={rolloverForm.durationMonths} onChange={e => updateRolloverForm({ durationMonths: e.target.value })} required />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label className="form-label">Default Payment Mode</label>
+                    <select className="form-input" value={rolloverForm.defaultPaymentMode} onChange={e => updateRolloverForm({ defaultPaymentMode: e.target.value as any })}>
+                      <option value="cash">Cash</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                      <option value="upi">UPI</option>
+                      <option value="cheque">Cheque</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  {rolloverForm.payoutType === 'monthly' && (
+                    <div>
+                      <label className="form-label">Payout Day</label>
+                      <select className="form-input" value={rolloverForm.payoutDay} onChange={e => updateRolloverForm({ payoutDay: e.target.value })}>
+                        <option value="">Same as start day</option>
+                        {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                          <option key={day} value={day}>{day}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="form-label">Notes</label>
+                  <textarea className="form-input" style={{ minHeight: '60px' }} value={rolloverForm.notes} onChange={e => updateRolloverForm({ notes: e.target.value })} placeholder="Optional rollover notes..." />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setShowRolloverModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" disabled={rollingOver} className="btn btn-primary">
+                  {rollingOver ? 'Processing...' : 'Complete Rollover'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
       plan: {
         include: { client: true },
       },
+      transactions: { orderBy: { createdAt: 'desc' } },
     },
     orderBy: { dueDate: 'asc' },
   });

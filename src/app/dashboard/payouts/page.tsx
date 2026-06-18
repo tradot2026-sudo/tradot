@@ -26,6 +26,21 @@ function PayoutsContent() {
     paidAmount: '', paymentDate: today(), modeOfPayment: 'cash' as PaymentMode, referenceNo: '', notes: '',
   });
   const [saving, setSaving] = useState(false);
+  const [whatsappTemplates, setWhatsappTemplates] = useState<{ whatsappTemplatePaid: string | null; whatsappTemplateReminder: string | null } | null>(null);
+
+  const compileTemplate = (template: string, payout: EnrichedPayout) => {
+    const client = payout.plan?.client;
+    const plan = payout.plan;
+    return template
+      .replace(/{client_name}/g, client?.name || '')
+      .replace(/{plan_name}/g, plan?.planName || '')
+      .replace(/{payout_amount}/g, formatCurrency(payout.expectedAmount))
+      .replace(/{due_date}/g, payout.dueDate ? formatDate(payout.dueDate) : '')
+      .replace(/{payout_number}/g, payout.payoutNumber ? String(payout.payoutNumber) : '')
+      .replace(/{payment_date}/g, payout.paymentDate ? formatDate(payout.paymentDate) : '')
+      .replace(/{payment_mode}/g, payout.modeOfPayment ? getPaymentModeLabel(payout.modeOfPayment) : '')
+      .replace(/{reference_no}/g, payout.referenceNo || 'N/A');
+  };
 
   const sendWhatsAppNotification = (payout: EnrichedPayout) => {
     const client = payout.plan?.client;
@@ -39,9 +54,19 @@ function PayoutsContent() {
     
     let message = '';
     if (payout.status === 'paid') {
-      message = `Hello ${client.name},\n\nWe have successfully processed your payout of ${formattedAmount} for the investment "${payout.plan?.planName}".\n\nTransaction Details:\n- Date: ${payout.paymentDate ? formatDate(payout.paymentDate) : 'N/A'}\n- Mode: ${payout.modeOfPayment ? getPaymentModeLabel(payout.modeOfPayment) : 'N/A'}\n- Reference No: ${payout.referenceNo || 'N/A'}\n\nThank you for investing with us!\n- Tradot`;
+      const customTemplate = whatsappTemplates?.whatsappTemplatePaid;
+      if (customTemplate) {
+        message = compileTemplate(customTemplate, payout);
+      } else {
+        message = `Hello ${client.name},\n\nWe have successfully processed your payout of ${formattedAmount} for the investment "${payout.plan?.planName}".\n\nTransaction Details:\n- Date: ${payout.paymentDate ? formatDate(payout.paymentDate) : 'N/A'}\n- Mode: ${payout.modeOfPayment ? getPaymentModeLabel(payout.modeOfPayment) : 'N/A'}\n- Reference No: ${payout.referenceNo || 'N/A'}\n\nThank you for investing with us!\n- Tradot`;
+      }
     } else {
-      message = `Hello ${client.name},\n\nThis is a friendly reminder that a payout of ${formattedAmount} for your investment "${payout.plan?.planName}" is scheduled for ${formatDate(payout.dueDate)}.\n\nThank you,\n- Tradot`;
+      const customTemplate = whatsappTemplates?.whatsappTemplateReminder;
+      if (customTemplate) {
+        message = compileTemplate(customTemplate, payout);
+      } else {
+        message = `Hello ${client.name},\n\nThis is a friendly reminder that a payout of ${formattedAmount} for your investment "${payout.plan?.planName}" is scheduled for ${formatDate(payout.dueDate)}.\n\nThank you,\n- Tradot`;
+      }
     }
 
     const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
@@ -66,7 +91,19 @@ function PayoutsContent() {
     }
   }, []);
 
-  useEffect(() => { fetchPayouts(); }, [fetchPayouts]);
+  const fetchTemplates = useCallback(async () => {
+    try {
+      const res = await api.get<{ whatsappTemplatePaid: string | null; whatsappTemplateReminder: string | null }>('/api/settings/templates');
+      setWhatsappTemplates(res);
+    } catch (err) {
+      console.error('Failed to fetch templates:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPayouts();
+    fetchTemplates();
+  }, [fetchPayouts, fetchTemplates]);
 
   const filterPayouts = (p: EnrichedPayout): boolean => {
     const todayStr = today();
@@ -264,6 +301,18 @@ function PayoutsContent() {
                         </>
                       ) : (
                         <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>
+                      )}
+
+                      {/* Transaction history log */}
+                      {(payout as any).transactions && (payout as any).transactions.length > 0 && (
+                        <div style={{ marginTop: '8px', padding: '6px 8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '0.7rem', width: 'max-content' }}>
+                          <div style={{ fontWeight: 600, color: 'rgba(255,255,255,0.4)', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '3px', marginBottom: '3px' }}>Ledger logs:</div>
+                          {(payout as any).transactions.map((tx: any) => (
+                            <div key={tx.id} style={{ color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>
+                              • {formatCurrency(tx.amountPaid)} on {formatDate(tx.paymentDate)} via {getPaymentModeLabel(tx.modeOfPayment)}
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </td>
                     <td style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>{payout.modeOfPayment ? getPaymentModeLabel(payout.modeOfPayment) : '—'}</td>

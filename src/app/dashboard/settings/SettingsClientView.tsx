@@ -40,6 +40,12 @@ export default function SettingsClientView({
   const [clearing, setClearing] = useState(false);
   const [clearError, setClearError] = useState<string | null>(null);
 
+  // WhatsApp Templates State
+  const [whatsappTemplatePaid, setWhatsappTemplatePaid] = useState('');
+  const [whatsappTemplateReminder, setWhatsappTemplateReminder] = useState('');
+  const [savingTemplates, setSavingTemplates] = useState(false);
+  const [templateStatus, setTemplateStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
   const fetchStats = useCallback(async () => {
     setLoadingStats(true);
     try {
@@ -52,9 +58,47 @@ export default function SettingsClientView({
     }
   }, []);
 
+  const fetchTemplates = useCallback(async () => {
+    try {
+      const res = await api.get<{ whatsappTemplatePaid: string | null; whatsappTemplateReminder: string | null }>('/api/settings/templates');
+      setWhatsappTemplatePaid(res.whatsappTemplatePaid || '');
+      setWhatsappTemplateReminder(res.whatsappTemplateReminder || '');
+    } catch (err) {
+      console.error('Failed to fetch templates:', err);
+    }
+  }, []);
+
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+    let active = true;
+    const load = async () => {
+      await Promise.resolve();
+      if (!active) return;
+      fetchStats();
+      fetchTemplates();
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [fetchStats, fetchTemplates]);
+
+  const handleSaveTemplates = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingTemplates(true);
+    setTemplateStatus(null);
+    try {
+      await api.post('/api/settings/templates', {
+        whatsappTemplatePaid: whatsappTemplatePaid || null,
+        whatsappTemplateReminder: whatsappTemplateReminder || null,
+      });
+      setTemplateStatus({ type: 'success', message: 'WhatsApp templates updated successfully!' });
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Failed to update templates.';
+      setTemplateStatus({ type: 'error', message: errMsg });
+    } finally {
+      setSavingTemplates(false);
+    }
+  };
 
   const handleExport = async () => {
     setExporting(true);
@@ -318,6 +362,70 @@ export default function SettingsClientView({
               )}
             </div>
           </div>
+        </div>
+
+        {/* WhatsApp Notification Templates */}
+        <div className="glass-card" style={{ padding: '24px' }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: 'white', fontSize: '1rem', marginBottom: '20px' }}>
+            <Settings size={18} color="#25D366" /> WhatsApp Notification Templates
+          </h3>
+          <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', lineHeight: 1.5, marginBottom: '20px' }}>
+            Customize the default messages sent to clients. Leave templates blank to use the system default messages.
+          </p>
+
+          <form onSubmit={handleSaveTemplates}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '20px' }} className="responsive-grid">
+              <div>
+                <label className="form-label" style={{ fontWeight: 600 }}>Due / Overdue Payout Reminder</label>
+                <textarea
+                  className="form-input"
+                  style={{ minHeight: '140px', fontFamily: 'monospace', fontSize: '0.8rem', lineHeight: 1.4 }}
+                  value={whatsappTemplateReminder}
+                  onChange={e => setWhatsappTemplateReminder(e.target.value)}
+                  placeholder="Hello {client_name},&#10;&#10;This is a friendly reminder that a payout of {payout_amount} for your investment '{plan_name}' is scheduled for {due_date}.&#10;&#10;Thank you,&#10;- Tradot"
+                />
+              </div>
+
+              <div>
+                <label className="form-label" style={{ fontWeight: 600 }}>Payment Receipt / Confirmation</label>
+                <textarea
+                  className="form-input"
+                  style={{ minHeight: '140px', fontFamily: 'monospace', fontSize: '0.8rem', lineHeight: 1.4 }}
+                  value={whatsappTemplatePaid}
+                  onChange={e => setWhatsappTemplatePaid(e.target.value)}
+                  placeholder="Hello {client_name},&#10;&#10;We have successfully processed your payout of {payout_amount} for the investment '{plan_name}'.&#10;&#10;Transaction Details:&#10;- Date: {payment_date}&#10;- Mode: {payment_mode}&#10;- Ref No: {reference_no}&#10;&#10;Thank you!&#10;- Tradot"
+                />
+              </div>
+            </div>
+
+            <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '18px', fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', lineHeight: 1.5 }}>
+              <strong style={{ color: 'rgba(255,255,255,0.7)' }}>💡 Placeholders available:</strong>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px', marginTop: '6px' }}>
+                <code>{`{client_name}`}</code>
+                <code>{`{plan_name}`}</code>
+                <code>{`{payout_amount}`}</code>
+                <code>{`{due_date}`}</code>
+                <code>{`{payout_number}`}</code>
+                <code>{`{payment_date}`}</code>
+                <code>{`{payment_mode}`}</code>
+                <code>{`{reference_no}`}</code>
+              </div>
+            </div>
+
+            {templateStatus && (
+              <div
+                className={`alert ${templateStatus.type === 'success' ? 'alert-success' : 'alert-danger'}`}
+                style={{ marginBottom: '16px', padding: '8px 12px', fontSize: '0.75rem', gap: '8px' }}
+              >
+                {templateStatus.type === 'success' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                <span>{templateStatus.message}</span>
+              </div>
+            )}
+
+            <button type="submit" className="btn btn-primary" disabled={savingTemplates} style={{ background: '#25D366', borderColor: '#22c35e' }}>
+              {savingTemplates ? 'Saving...' : 'Save Templates'}
+            </button>
+          </form>
         </div>
 
         {/* Danger Zone */}

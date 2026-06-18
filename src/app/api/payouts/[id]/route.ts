@@ -19,6 +19,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // Handle Reset Payment
   if (body.resetPayment) {
+    // Delete all transactions for this payout
+    await prisma.paymentTransaction.deleteMany({
+      where: { payoutId: id },
+    });
+
     const updated = await prisma.payout.update({
       where: { id },
       data: {
@@ -136,6 +141,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const result = await prisma.$transaction(async (tx) => {
     let lastUpdated = null;
     for (const u of updates) {
+      const existingPayout = allPayouts.find(ap => ap.id === u.id)!;
+      const deltaAmount = u.paidAmount - (existingPayout.paidAmount || 0);
+
       lastUpdated = await tx.payout.update({
         where: { id: u.id },
         data: {
@@ -147,6 +155,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           notes: u.notes,
         },
       });
+
+      if (deltaAmount > 0) {
+        await tx.paymentTransaction.create({
+          data: {
+            payoutId: u.id,
+            amountPaid: deltaAmount,
+            paymentDate: paymentDate || new Date().toISOString().split('T')[0],
+            modeOfPayment: modeOfPayment || 'cash',
+            referenceNo: referenceNo || null,
+            notes: u.id === id ? notes : `Rollover allocation from payout #${payout.payoutNumber || ''}`,
+          },
+        });
+      }
     }
     return lastUpdated || payout;
   });
