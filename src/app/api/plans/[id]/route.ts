@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import { generatePayoutSchedule, calculateMaturityDate } from '@/lib/utils';
+import { generatePayoutSchedule, calculateMaturityDate, calculateTotalPayouts } from '@/lib/utils';
 import type { PayoutFrequency } from '@/types';
 
 async function getPlanOrForbid(id: string, userId: string) {
@@ -48,6 +48,17 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       maturityDate = calculateMaturityDate(body.startDate, parseInt(body.durationMonths));
     }
 
+    // Resolve total payouts
+    let totalPayouts = null;
+    if (maturityDate && body.payoutType) {
+      totalPayouts = calculateTotalPayouts(
+        body.startDate,
+        maturityDate,
+        body.payoutType as PayoutFrequency,
+        body.payoutDay ? parseInt(body.payoutDay) : null
+      );
+    }
+
     // 2. Resolve payout amount
     let payoutAmount = body.payoutAmount ? parseFloat(body.payoutAmount) : null;
     let payoutPercentage = body.payoutPercentage ? parseFloat(body.payoutPercentage) / 100 : null;
@@ -67,6 +78,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         startDate: body.startDate,
         maturityDate,
         durationMonths: body.durationMonths ? parseInt(body.durationMonths) : null,
+        totalPayouts,
+        payoutDay: body.payoutDay ? parseInt(body.payoutDay) : null,
         defaultPaymentMode: body.defaultPaymentMode,
         status: body.status,
         notes: body.notes || null,
@@ -99,7 +112,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         body.startDate,
         maturityDate,
         body.payoutType as PayoutFrequency,
-        payoutAmount
+        payoutAmount,
+        body.payoutDay ? parseInt(body.payoutDay) : null
       );
 
       // Filter out payout numbers that are already settled (paid/partial)

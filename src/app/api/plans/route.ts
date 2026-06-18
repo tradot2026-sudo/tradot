@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import { generatePayoutSchedule, calculateMaturityDate } from '@/lib/utils';
+import { generatePayoutSchedule, calculateMaturityDate, calculateTotalPayouts } from '@/lib/utils';
 import type { PayoutFrequency } from '@/types';
 
 export async function GET(req: NextRequest) {
@@ -42,6 +42,17 @@ export async function POST(req: NextRequest) {
     maturityDate = calculateMaturityDate(body.startDate, parseInt(body.durationMonths));
   }
 
+  // Resolve total payouts
+  let totalPayouts = null;
+  if (maturityDate && body.payoutType) {
+    totalPayouts = calculateTotalPayouts(
+      body.startDate,
+      maturityDate,
+      body.payoutType as PayoutFrequency,
+      body.payoutDay ? parseInt(body.payoutDay) : null
+    );
+  }
+
   // Resolve payout amount
   let payoutAmount = body.payoutAmount ? parseFloat(body.payoutAmount) : null;
   let payoutPercentage = body.payoutPercentage ? parseFloat(body.payoutPercentage) / 100 : null;
@@ -60,6 +71,8 @@ export async function POST(req: NextRequest) {
       startDate: body.startDate,
       maturityDate,
       durationMonths: body.durationMonths ? parseInt(body.durationMonths) : null,
+      totalPayouts,
+      payoutDay: body.payoutDay ? parseInt(body.payoutDay) : null,
       defaultPaymentMode: body.defaultPaymentMode || 'cash',
       status: body.status || 'active',
       notes: body.notes || null,
@@ -74,7 +87,8 @@ export async function POST(req: NextRequest) {
       body.startDate,
       maturityDate,
       body.payoutType as PayoutFrequency,
-      payoutAmount
+      payoutAmount,
+      body.payoutDay ? parseInt(body.payoutDay) : null
     );
 
     if (schedule.length > 0) {

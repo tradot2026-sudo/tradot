@@ -11,7 +11,8 @@ import {
 } from 'lucide-react';
 import {
   formatCurrency, formatDate, calculateMaturityDate,
-  getFrequencyLabel, getPaymentModeLabel, getPayoutStatus
+  getFrequencyLabel, getPaymentModeLabel, getPayoutStatus,
+  getOrdinalSuffix
 } from '@/lib/utils';
 import type { Client, Plan, PayoutFrequency, PaymentMode, PlanStatus } from '@/types';
 import { format } from 'date-fns';
@@ -27,6 +28,7 @@ interface PlanForm {
   maturityDate: string;
   durationMonths: string;
   useDuration: boolean;
+  payoutDay: string;
   defaultPaymentMode: PaymentMode;
   status: PlanStatus;
   notes: string;
@@ -37,6 +39,7 @@ const defaultPlanForm: PlanForm = {
   payoutAmount: '', payoutPercentage: '', usePercentage: false,
   startDate: format(new Date(), 'yyyy-MM-dd'),
   maturityDate: '', durationMonths: '', useDuration: true,
+  payoutDay: '',
   default_payment_mode: 'cash' as any, // fallback for initialization below
   defaultPaymentMode: 'cash', status: 'active', notes: '',
 } as any;
@@ -97,6 +100,7 @@ export default function ClientDetailPage() {
       payoutAmount: '', payoutPercentage: '', usePercentage: false,
       startDate: format(new Date(), 'yyyy-MM-dd'),
       maturityDate: '', durationMonths: '', useDuration: true,
+      payoutDay: '',
       defaultPaymentMode: 'cash', status: 'active', notes: '',
     } as any);
     setError('');
@@ -116,6 +120,7 @@ export default function ClientDetailPage() {
       maturityDate: plan.maturityDate || '',
       durationMonths: plan.durationMonths ? String(plan.durationMonths) : '',
       useDuration: !!plan.durationMonths,
+      payoutDay: plan.payoutDay ? String(plan.payoutDay) : '',
       defaultPaymentMode: plan.defaultPaymentMode,
       status: plan.status,
       notes: plan.notes || '',
@@ -148,6 +153,7 @@ export default function ClientDetailPage() {
       startDate: planForm.startDate,
       maturityDate: planForm.useDuration ? null : (planForm.maturityDate || null),
       durationMonths: planForm.useDuration && planForm.durationMonths ? parseInt(planForm.durationMonths) : null,
+      payoutDay: planForm.payoutType === 'monthly' && planForm.payoutDay ? parseInt(planForm.payoutDay) : null,
       defaultPaymentMode: planForm.defaultPaymentMode,
       status: planForm.status,
       notes: planForm.notes,
@@ -403,7 +409,11 @@ export default function ClientDetailPage() {
                     <div>
                       <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payout</div>
                       <div style={{ fontWeight: 600, color: 'white', marginTop: '4px' }}>
-                        {formatCurrency(plan.payoutAmount || 0)}<span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginLeft: '4px' }}>/ {getFrequencyLabel(plan.payoutType).toLowerCase()}</span>
+                        {formatCurrency(plan.payoutAmount || 0)}
+                        <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginLeft: '4px' }}>
+                          / {getFrequencyLabel(plan.payoutType).toLowerCase()}
+                          {plan.payoutType === 'monthly' && plan.payoutDay && ` (on ${plan.payoutDay}${getOrdinalSuffix(plan.payoutDay)})`}
+                        </span>
                       </div>
                     </div>
                     <div>
@@ -461,7 +471,7 @@ export default function ClientDetailPage() {
                   <input id="plan-name" className="form-input" value={planForm.planName} onChange={e => updatePlanForm({ planName: e.target.value })} required placeholder="e.g. Fixed Monthly 2%" />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: planForm.payoutType === 'monthly' ? '1fr 1fr 1fr' : '1fr 1fr', gap: '12px' }}>
                   <div>
                     <label className="form-label">Invested Amount (₹) *</label>
                     <input id="plan-principal" className="form-input" type="number" min="1" step="0.01" value={planForm.principalAmount} onChange={e => updatePlanForm({ principalAmount: e.target.value })} required placeholder="100000" />
@@ -474,6 +484,17 @@ export default function ClientDetailPage() {
                       <option value="daily">Daily</option>
                     </select>
                   </div>
+                  {planForm.payoutType === 'monthly' && (
+                    <div>
+                      <label className="form-label">Payout Day</label>
+                      <select id="plan-payout-day" className="form-input" value={planForm.payoutDay} onChange={e => updatePlanForm({ payoutDay: e.target.value })}>
+                        <option value="">Same as start day</option>
+                        {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                          <option key={day} value={day}>{day}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 {/* Payout amount */}

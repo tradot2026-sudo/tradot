@@ -50,6 +50,7 @@ model Plan {
   maturityDate        String?
   durationMonths      Int?
   totalPayouts        Int?
+  payoutDay           Int?
   defaultPaymentMode  String    @default("cash") // cash | bank_transfer | upi | cheque | other
   status              String    @default("active") // active | paused | completed | cancelled
   notes               String?

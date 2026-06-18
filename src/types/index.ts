@@ -32,6 +32,7 @@ export interface Plan {
   maturityDate?: string;
   durationMonths?: number;
   totalPayouts?: number;
+  payoutDay?: number;
   defaultPaymentMode: PaymentMode;
   status: PlanStatus;
   notes?: string;

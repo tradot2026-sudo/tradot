@@ -41,22 +41,39 @@ export function calculateMaturityDate(
   return format(maturity, 'yyyy-MM-dd');
 }
 
+export function getOrdinalSuffix(day: number): string {
+  if (day > 3 && day < 21) return 'th';
+  switch (day % 10) {
+    case 1:  return 'st';
+    case 2:  return 'nd';
+    case 3:  return 'rd';
+    default: return 'th';
+  }
+}
+
 export function calculateTotalPayouts(
   startDate: string,
   maturityDate: string,
-  frequency: PayoutFrequency
+  frequency: PayoutFrequency,
+  payoutDay?: number | null
 ): number {
+  if (frequency === 'monthly') {
+    const start = parseISO(startDate);
+    const end = parseISO(maturityDate);
+    const diffYears = end.getFullYear() - start.getFullYear();
+    const diffMonths = end.getMonth() - start.getMonth();
+    return Math.max(1, diffYears * 12 + diffMonths);
+  }
+
   const start = parseISO(startDate);
   const end = parseISO(maturityDate);
-
   let count = 0;
-  let current = start;
+  let current = frequency === 'daily' ? addDays(start, 1) : addWeeks(start, 1);
 
   while (isBefore(current, end) || isEqual(current, end)) {
     count++;
     if (frequency === 'daily') current = addDays(current, 1);
-    else if (frequency === 'weekly') current = addWeeks(current, 1);
-    else current = addMonths(current, 1);
+    else current = addWeeks(current, 1);
     if (count > 10000) break; // safety
   }
 
@@ -68,29 +85,64 @@ export function generatePayoutSchedule(
   startDate: string,
   maturityDate: string,
   frequency: PayoutFrequency,
-  expectedAmount: number
+  expectedAmount: number,
+  payoutDay?: number | null
 ): Omit<Payout, 'id' | 'createdAt' | 'updatedAt'>[] {
   const start = parseISO(startDate);
   const end = parseISO(maturityDate);
   const schedule: Omit<Payout, 'id' | 'createdAt' | 'updatedAt'>[] = [];
 
-  let current = start;
-  let number = 1;
+  if (frequency === 'monthly') {
+    const startYear = start.getFullYear();
+    const startMonth = start.getMonth(); // 0-indexed
+    
+    // Calculate calendar month difference
+    const diffYears = end.getFullYear() - start.getFullYear();
+    const diffMonths = end.getMonth() - start.getMonth();
+    const duration = Math.max(1, diffYears * 12 + diffMonths);
+    
+    const day = payoutDay || start.getDate();
 
-  while (isBefore(current, end) || isEqual(current, end)) {
-    schedule.push({
-      planId,
-      dueDate: format(current, 'yyyy-MM-dd'),
-      expectedAmount,
-      paidAmount: 0,
-      status: 'pending',
-      payoutNumber: number,
-    });
-    number++;
-    if (frequency === 'daily') current = addDays(current, 1);
-    else if (frequency === 'weekly') current = addWeeks(current, 1);
-    else current = addMonths(current, 1);
-    if (number > 10000) break;
+    for (let i = 1; i <= duration; i++) {
+      const targetMonthTotal = startMonth + i;
+      const targetYear = startYear + Math.floor(targetMonthTotal / 12);
+      const targetMonth = targetMonthTotal % 12;
+
+      // Find last day of target month to clamp target day
+      const nextMonthFirstDay = new Date(targetYear, targetMonth + 1, 1);
+      nextMonthFirstDay.setDate(nextMonthFirstDay.getDate() - 1);
+      const maxDays = nextMonthFirstDay.getDate();
+      const targetDay = Math.min(day, maxDays);
+      const dueDateObj = new Date(targetYear, targetMonth, targetDay);
+
+      schedule.push({
+        planId,
+        dueDate: format(dueDateObj, 'yyyy-MM-dd'),
+        expectedAmount,
+        paidAmount: 0,
+        status: 'pending',
+        payoutNumber: i,
+      });
+    }
+  } else {
+    // For daily/weekly, the first payout completes after 1 period (1 day / 1 week)
+    let current = frequency === 'daily' ? addDays(start, 1) : addWeeks(start, 1);
+    let number = 1;
+
+    while (isBefore(current, end) || isEqual(current, end)) {
+      schedule.push({
+        planId,
+        dueDate: format(current, 'yyyy-MM-dd'),
+        expectedAmount,
+        paidAmount: 0,
+        status: 'pending',
+        payoutNumber: number,
+      });
+      number++;
+      if (frequency === 'daily') current = addDays(current, 1);
+      else if (frequency === 'weekly') current = addWeeks(current, 1);
+      if (number > 10000) break;
+    }
   }
 
   return schedule;

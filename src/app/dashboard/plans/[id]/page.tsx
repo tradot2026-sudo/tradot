@@ -10,7 +10,8 @@ import {
 } from 'lucide-react';
 import {
   formatCurrency, formatDate, getPaymentModeLabel,
-  getPayoutStatusLabel, today, getDelayLabel, calculateDelayDays
+  getPayoutStatusLabel, today, getDelayLabel, calculateDelayDays,
+  getOrdinalSuffix
 } from '@/lib/utils';
 import type { Plan, Client, Payout, PayoutStatus, PaymentMode } from '@/types';
 
@@ -405,6 +406,7 @@ export default function PlanDetailPage() {
             { label: 'Principal', value: formatCurrency(plan.principalAmount), color: '#10b981' },
             { label: 'Per Payout', value: formatCurrency(plan.payoutAmount || 0), color: 'white' },
             { label: 'Frequency', value: plan.payoutType.charAt(0).toUpperCase() + plan.payoutType.slice(1), color: 'white' },
+            ...(plan.payoutType === 'monthly' ? [{ label: 'Payout Day', value: plan.payoutDay ? `${plan.payoutDay}${getOrdinalSuffix(plan.payoutDay)} of month` : 'Same as start day', color: 'white' }] : []),
             { label: 'Start Date', value: formatDate(plan.startDate), color: 'white' },
             { label: 'Maturity', value: plan.maturityDate ? formatDate(plan.maturityDate) : '—', color: 'white' },
             { label: 'Payment Mode', value: getPaymentModeLabel(plan.defaultPaymentMode), color: 'white' },
