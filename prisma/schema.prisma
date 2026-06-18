@@ -33,6 +33,8 @@ model Client {
   plans     Plan[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([createdBy])
 }
 
 model Plan {
@@ -56,6 +58,9 @@ model Plan {
   payouts             Payout[]
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+
+  @@index([clientId])
+  @@index([createdBy])
 }
 
 model Payout {
@@ -73,4 +78,7 @@ model Payout {
   payoutNumber    Int?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([planId])
+  @@index([dueDate])
 }
