@@ -76,15 +76,16 @@ export default function LoginPage() {
     <div className="min-h-screen flex" style={{ background: 'linear-gradient(135deg, #0a0f1e 0%, #0d1426 50%, #0a0f1e 100%)' }}>
       {/* Left decorative panel */}
       <div
-        className="hidden lg:flex flex-col p-16 w-[45%]"
+        className="hidden lg:flex flex-col w-[45%]"
         style={{
           background: 'linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(139,92,246,0.1) 100%)',
           borderRight: '1px solid rgba(255,255,255,0.06)',
           justifyContent: 'center',
           alignItems: 'center',
+          padding: '80px 64px',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', width: '100%', maxWidth: '420px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '64px', width: '100%', maxWidth: '420px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <TrendingUp size={20} color="white" />
