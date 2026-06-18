@@ -76,43 +76,47 @@ export default function LoginPage() {
     <div className="min-h-screen flex" style={{ background: 'linear-gradient(135deg, #0a0f1e 0%, #0d1426 50%, #0a0f1e 100%)' }}>
       {/* Left decorative panel */}
       <div
-        className="hidden lg:flex flex-col justify-between p-12 w-[45%]"
+        className="hidden lg:flex flex-col p-16 w-[45%]"
         style={{
           background: 'linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(139,92,246,0.1) 100%)',
           borderRight: '1px solid rgba(255,255,255,0.06)',
+          justifyContent: 'center',
+          alignItems: 'center',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <TrendingUp size={20} color="white" />
-          </div>
-          <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: '1.25rem', color: 'white' }}>Tradot</span>
-        </div>
-
-        <div>
-          <h2 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '2.5rem', fontWeight: 800, color: 'white', lineHeight: 1.2, marginBottom: '20px' }}>
-            Manage your<br />
-            <span style={{ background: 'linear-gradient(135deg, #a5b4fc, #c084fc)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              investment payouts
-            </span><br />
-            with ease.
-          </h2>
-          <p style={{ color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, maxWidth: '380px' }}>
-            Track client investments, schedule payouts, monitor due dates, and export reports — all in one place.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '32px' }}>
-          {[
-            { label: 'Payout Tracking', value: '100%' },
-            { label: 'Auto-Schedules', value: '∞' },
-            { label: 'Report Exports', value: 'PDF & CSV' },
-          ].map(item => (
-            <div key={item.label}>
-              <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#a5b4fc' }}>{item.value}</div>
-              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>{item.label}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', width: '100%', maxWidth: '420px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <TrendingUp size={20} color="white" />
             </div>
-          ))}
+            <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: '1.25rem', color: 'white' }}>Tradot</span>
+          </div>
+
+          <div>
+            <h2 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '2.5rem', fontWeight: 800, color: 'white', lineHeight: 1.2, marginBottom: '20px' }}>
+              Manage your<br />
+              <span style={{ background: 'linear-gradient(135deg, #a5b4fc, #c084fc)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                investment payouts
+              </span><br />
+              with ease.
+            </h2>
+            <p style={{ color: 'rgba(255,255,255,0.5)', lineHeight: 1.7 }}>
+              Track client investments, schedule payouts, monitor due dates, and export reports — all in one place.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: '32px' }}>
+            {[
+              { label: 'Payout Tracking', value: '100%' },
+              { label: 'Auto-Schedules', value: '∞' },
+              { label: 'Report Exports', value: 'PDF & CSV' },
+            ].map(item => (
+              <div key={item.label}>
+                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#a5b4fc' }}>{item.value}</div>
+                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '4px' }}>{item.label}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -120,7 +124,7 @@ export default function LoginPage() {
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px' }}>
         <div style={{ width: '100%', maxWidth: '400px' }}>
           {/* Mobile logo */}
-          <div className="lg:hidden" style={{ display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'center', marginBottom: '40px' }}>
+          <div className="lg:hidden" style={{ display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'flex-start', marginBottom: '32px' }}>
             <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <TrendingUp size={20} color="white" />
             </div>
