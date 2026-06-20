@@ -1,8 +1,9 @@
 // Simple fetch wrapper for API calls
 export async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const { headers: customHeaders, ...restOptions } = options || {};
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
+    ...restOptions,
+    headers: { 'Content-Type': 'application/json', ...(customHeaders as Record<string, string>) },
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Request failed' }));

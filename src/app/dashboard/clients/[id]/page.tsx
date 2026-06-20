@@ -40,9 +40,8 @@ const defaultPlanForm: PlanForm = {
   startDate: format(new Date(), 'yyyy-MM-dd'),
   maturityDate: '', durationMonths: '', useDuration: true,
   payoutDay: '',
-  default_payment_mode: 'cash' as any, // fallback for initialization below
   defaultPaymentMode: 'cash', status: 'active', notes: '',
-} as any;
+};
 
 export default function ClientDetailPage() {
   const params = useParams();
@@ -102,7 +101,7 @@ export default function ClientDetailPage() {
       maturityDate: '', durationMonths: '', useDuration: true,
       payoutDay: '',
       defaultPaymentMode: 'cash', status: 'active', notes: '',
-    } as any);
+    });
     setError('');
     setShowPlanModal(true);
   };
@@ -112,7 +111,7 @@ export default function ClientDetailPage() {
     setPlanForm({
       planName: plan.planName,
       principalAmount: String(plan.principalAmount),
-      payoutType: plan.payoutType,
+      payoutType: plan.payoutType as PayoutFrequency,
       payoutAmount: String(plan.payoutAmount || ''),
       payoutPercentage: plan.payoutPercentage ? String(plan.payoutPercentage * 100) : '',
       usePercentage: !!plan.payoutPercentage,
@@ -121,10 +120,10 @@ export default function ClientDetailPage() {
       durationMonths: plan.durationMonths ? String(plan.durationMonths) : '',
       useDuration: !!plan.durationMonths,
       payoutDay: plan.payoutDay ? String(plan.payoutDay) : '',
-      defaultPaymentMode: plan.defaultPaymentMode,
-      status: plan.status,
+      defaultPaymentMode: plan.defaultPaymentMode as PaymentMode,
+      status: plan.status as PlanStatus,
       notes: plan.notes || '',
-    } as any);
+    });
     setError('');
     setShowPlanModal(true);
   };

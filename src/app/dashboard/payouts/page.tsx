@@ -22,6 +22,7 @@ function PayoutsContent() {
   const [filter, setFilter] = useState<FilterType>((searchParams.get('filter') as FilterType) || 'all');
   const [search, setSearch] = useState('');
   const [activePayoutId, setActivePayoutId] = useState<string | null>(null);
+  const [resetId, setResetId] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     paidAmount: '', paymentDate: today(), modeOfPayment: 'cash' as PaymentMode, referenceNo: '', notes: '',
   });
@@ -173,6 +174,7 @@ function PayoutsContent() {
     try {
       await api.patch(`/api/payouts/${id}`, { resetPayment: true });
       fetchPayouts();
+      setResetId(null);
     } catch (err) {
       console.error('Failed to reset payout payment:', err);
     }
@@ -336,7 +338,7 @@ function PayoutsContent() {
                           </button>
                         )}
                         {(isPaid || payout.status === 'partial') && (
-                          <button onClick={() => handleReset(payout.id)} className="btn btn-secondary btn-sm" title="Reset">
+                          <button onClick={() => setResetId(payout.id)} className="btn btn-secondary btn-sm" title="Reset">
                             <RotateCcw size={13} />
                           </button>
                         )}
@@ -468,6 +470,26 @@ function PayoutsContent() {
                 </form>
               );
             })()}
+          </div>
+        </div>
+      )}
+      {/* Reset Payout Confirm Modal */}
+      {resetId && (
+        <div className="modal-overlay" onClick={() => setResetId(null)}>
+          <div className="modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '28px', textAlign: 'center' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                <RotateCcw size={24} color="#f87171" />
+              </div>
+              <h3 style={{ color: 'white', fontWeight: 700, marginBottom: '8px' }}>Reset Payout?</h3>
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem', marginBottom: '24px' }}>
+                Are you sure you want to reset this payment? This will permanently delete the payment history and ledger for this payout.
+              </p>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <button onClick={() => setResetId(null)} className="btn btn-secondary">Cancel</button>
+                <button onClick={() => handleReset(resetId)} className="btn btn-danger">Reset Payment</button>
+              </div>
+            </div>
           </div>
         </div>
       )}

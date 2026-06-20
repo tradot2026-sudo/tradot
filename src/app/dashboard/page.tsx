@@ -20,6 +20,10 @@ export default async function DashboardPage() {
   const startOfYearStr = `${new Date().getFullYear()}-01-01`;
   const endOfYearStr = `${new Date().getFullYear()}-12-31`;
 
+  const dueTodayWhere = { dueDate: todayStr, status: { in: ['pending', 'partial', 'overdue'] as string[] }, plan: { createdBy: userId, status: 'active' } };
+  const overdueWhere = { dueDate: { lt: todayStr }, status: { in: ['pending', 'overdue'] as string[] }, plan: { createdBy: userId, status: 'active' } };
+  const upcomingWhere = { dueDate: { gt: todayStr, lte: weekAhead }, status: { in: ['pending', 'partial'] as string[] }, plan: { createdBy: userId, status: 'active' } };
+
   const [
     totalClients,
     plans,
@@ -30,23 +34,26 @@ export default async function DashboardPage() {
     paidPayouts,
     maturingPlans,
     yearlyPayouts,
+    dueTodayAgg,
+    overdueAgg,
+    upcomingAgg,
   ] = await Promise.all([
     prisma.client.count({ where: { createdBy: userId } }),
     prisma.plan.findMany({ where: { createdBy: userId }, select: { principalAmount: true, status: true } }),
     prisma.payout.findMany({
-      where: { dueDate: todayStr, status: { in: ['pending', 'partial', 'overdue'] }, plan: { createdBy: userId, status: 'active' } },
+      where: dueTodayWhere,
       include: { plan: { include: { client: true } } },
       orderBy: { dueDate: 'asc' },
       take: 10,
     }),
     prisma.payout.findMany({
-      where: { dueDate: { lt: todayStr }, status: { in: ['pending', 'overdue'] }, plan: { createdBy: userId, status: 'active' } },
+      where: overdueWhere,
       include: { plan: { include: { client: true } } },
       orderBy: { dueDate: 'asc' },
       take: 10,
     }),
     prisma.payout.findMany({
-      where: { dueDate: { gt: todayStr, lte: weekAhead }, status: { in: ['pending', 'partial'] }, plan: { createdBy: userId, status: 'active' } },
+      where: upcomingWhere,
       include: { plan: { include: { client: true } } },
       orderBy: { dueDate: 'asc' },
       take: 10,
@@ -80,7 +87,23 @@ export default async function DashboardPage() {
         paidAmount: true,
         status: true
       }
-    })
+    }),
+    // Aggregate queries for accurate counts & sums (not capped at 10)
+    prisma.payout.aggregate({
+      where: dueTodayWhere,
+      _count: true,
+      _sum: { expectedAmount: true, paidAmount: true },
+    }),
+    prisma.payout.aggregate({
+      where: overdueWhere,
+      _count: true,
+      _sum: { expectedAmount: true, paidAmount: true },
+    }),
+    prisma.payout.aggregate({
+      where: upcomingWhere,
+      _count: true,
+      _sum: { expectedAmount: true, paidAmount: true },
+    }),
   ]);
 
   const serializePayout = (p: any) => ({
@@ -174,6 +197,10 @@ export default async function DashboardPage() {
     recentClients: recentClients.map(serializeClient),
     maturingPlans: maturingPlans.map(serializePlan),
     yearlyPayouts: yearlyPayouts,
+    // Accurate aggregate stats (not capped by take:10)
+    dueTodayStats: { count: dueTodayAgg._count, totalAmount: (dueTodayAgg._sum.expectedAmount || 0) - (dueTodayAgg._sum.paidAmount || 0) },
+    overdueStats: { count: overdueAgg._count, totalAmount: (overdueAgg._sum.expectedAmount || 0) - (overdueAgg._sum.paidAmount || 0) },
+    upcomingStats: { count: upcomingAgg._count, totalAmount: (upcomingAgg._sum.expectedAmount || 0) - (upcomingAgg._sum.paidAmount || 0) },
   };
 
   return <DashboardClientView data={dashboardData} />;

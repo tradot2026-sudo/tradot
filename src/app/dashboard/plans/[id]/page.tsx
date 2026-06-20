@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -36,6 +36,7 @@ export default function PlanDetailPage() {
   });
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'paid' | 'overdue' | 'partial'>('all');
+  const [resetId, setResetId] = useState<string | null>(null);
 
   // Plan Rollover State
   const [showRolloverModal, setShowRolloverModal] = useState(false);
@@ -393,7 +394,13 @@ export default function PlanDetailPage() {
       const data = await api.get<Plan & { client: Client; payouts: Payout[] }>(`/api/plans/${planId}`);
       if (data) {
         setPlan(data);
-        setPayouts(data.payouts || []);
+        // Enrich overdue status (DB stores 'pending', must detect overdue client-side)
+        const todayStr = today();
+        const enriched = (data.payouts || []).map(p => ({
+          ...p,
+          status: (p.status === 'pending' && p.dueDate < todayStr ? 'overdue' : p.status) as Payout['status'],
+        }));
+        setPayouts(enriched);
       }
     } catch (err) {
       console.error('Failed to load plan details:', err);
@@ -418,8 +425,11 @@ export default function PlanDetailPage() {
     fetchTemplates();
   }, [fetchData, fetchTemplates]);
 
+  const autoOpenedRolloverRef = useRef(false);
+
   useEffect(() => {
-    if (searchParams.get('rollover') === 'true' && plan) {
+    if (searchParams.get('rollover') === 'true' && plan && !autoOpenedRolloverRef.current) {
+      autoOpenedRolloverRef.current = true;
       openRollover();
     }
   }, [searchParams, plan]);
@@ -463,6 +473,7 @@ export default function PlanDetailPage() {
         resetPayment: true,
       });
       fetchData();
+      setResetId(null);
     } catch (err) {
       console.error('Failed to reset payout:', err);
     }
@@ -699,7 +710,7 @@ export default function PlanDetailPage() {
                         </button>
                       )}
                       {(isPaid || payout.status === 'partial') && (
-                        <button onClick={() => handleReset(payout.id)} className="btn btn-secondary btn-sm" title="Reset payment">
+                        <button onClick={() => setResetId(payout.id)} className="btn btn-secondary btn-sm" title="Reset payment">
                           <RotateCcw size={13} />
                         </button>
                       )}
@@ -969,6 +980,26 @@ export default function PlanDetailPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Reset Payout Confirm Modal */}
+      {resetId && (
+        <div className="modal-overlay" onClick={() => setResetId(null)}>
+          <div className="modal-content" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '28px', textAlign: 'center' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                <RotateCcw size={24} color="#f87171" />
+              </div>
+              <h3 style={{ color: 'white', fontWeight: 700, marginBottom: '8px' }}>Reset Payout?</h3>
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.875rem', marginBottom: '24px' }}>
+                Are you sure you want to reset this payment? This will permanently delete the payment history and ledger for this payout.
+              </p>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <button onClick={() => setResetId(null)} className="btn btn-secondary">Cancel</button>
+                <button onClick={() => handleReset(resetId)} className="btn btn-danger">Reset Payment</button>
+              </div>
+            </div>
           </div>
         </div>
       )}

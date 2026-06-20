@@ -5,6 +5,47 @@ import { prisma } from '@/lib/prisma';
 import { generatePayoutSchedule, calculateMaturityDate, calculateTotalPayouts } from '@/lib/utils';
 import type { PayoutFrequency, PaymentMode, PlanStatus } from '@/types';
 
+function normalizeDateString(dateVal: any): string | null {
+  if (!dateVal) return null;
+  const str = String(dateVal).trim();
+  if (!str) return null;
+
+  // 1. Try matching YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
+  const ymdMatch = str.match(/^(\d{4})[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])$/);
+  if (ymdMatch) {
+    const [_, y, m, d] = ymdMatch;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  // 2. Try parsing DD-MM-YYYY or MM-DD-YYYY (and slashes or dots)
+  const dmyOrMdyMatch = str.match(/^(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|[12]\d|3[01])[-/.](20\d{2}|\d{2})$/);
+  if (dmyOrMdyMatch) {
+    const [_, part1, part2, yearPart] = dmyOrMdyMatch;
+    const y = yearPart.length === 2 ? `20${yearPart}` : yearPart;
+    const p1 = parseInt(part1, 10);
+    const p2 = parseInt(part2, 10);
+
+    // If part1 > 12, it must be DD-MM-YYYY
+    if (p1 > 12) {
+      return `${y}-${String(p2).padStart(2, '0')}-${String(p1).padStart(2, '0')}`;
+    }
+    // If part2 > 12, it must be MM-DD-YYYY
+    if (p2 > 12) {
+      return `${y}-${String(p1).padStart(2, '0')}-${String(p2).padStart(2, '0')}`;
+    }
+    // Ambiguity: both <= 12. Default to DD-MM-YYYY as standard in India (Tradot context)
+    return `${y}-${String(p2).padStart(2, '0')}-${String(p1).padStart(2, '0')}`;
+  }
+
+  // 3. Fallback: JS Date parsing
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().split('T')[0];
+  }
+
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -73,7 +114,12 @@ export async function POST(req: NextRequest) {
           payoutType = 'monthly';
         }
 
-        const startDate = row.start_date || row.startDate || new Date().toISOString().split('T')[0];
+        const rawStartDate = row.start_date || row.startDate || new Date().toISOString().split('T')[0];
+        const startDate = normalizeDateString(rawStartDate);
+        if (!startDate) {
+          results.errors.push(`Skipped plan for "${clientName}": Invalid Start Date format ("${rawStartDate}").`);
+          continue;
+        }
         
         let durationMonths = null;
         const durationVal = row.duration_months || row.durationMonths || row.duration;
@@ -81,8 +127,15 @@ export async function POST(req: NextRequest) {
           durationMonths = parseInt(String(durationVal).replace(/[^\d]/g, ''));
         }
 
-        let maturityDate = row.maturity_date || row.maturityDate || null;
-        if (!maturityDate && durationMonths && !isNaN(durationMonths)) {
+        const rawMaturityDate = row.maturity_date || row.maturityDate || null;
+        let maturityDate = null;
+        if (rawMaturityDate) {
+          maturityDate = normalizeDateString(rawMaturityDate);
+          if (!maturityDate) {
+            results.errors.push(`Skipped plan for "${clientName}": Invalid Maturity Date format ("${rawMaturityDate}").`);
+            continue;
+          }
+        } else if (durationMonths && !isNaN(durationMonths)) {
           maturityDate = calculateMaturityDate(startDate, durationMonths);
         }
 

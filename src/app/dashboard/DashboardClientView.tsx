@@ -25,6 +25,10 @@ interface DashboardData {
   recentClients: Client[];
   maturingPlans?: (Plan & { client?: Client })[];
   yearlyPayouts?: { dueDate: string; expectedAmount: number; paidAmount: number; status: string }[];
+  // Aggregate stats (accurate, not capped by take:10)
+  dueTodayStats?: { count: number; totalAmount: number };
+  overdueStats?: { count: number; totalAmount: number };
+  upcomingStats?: { count: number; totalAmount: number };
 }
 
 function StatCard({
@@ -110,8 +114,13 @@ function PayoutRow({ payout, label }: { payout: Payout & { plan?: Plan & { clien
 }
 
 export default function DashboardClientView({ data }: { data: DashboardData }) {
-  const overdueAmount = data.overduePayouts.reduce((s, p) => s + (p.expectedAmount - (p.paidAmount || 0)), 0);
-  const dueTodayAmount = data.dueTodayPayouts.reduce((s, p) => s + (p.expectedAmount - (p.paidAmount || 0)), 0);
+  // Use aggregate stats when available, fallback to list-based calculation
+  const overdueCount = data.overdueStats?.count ?? data.overduePayouts.length;
+  const overdueAmount = data.overdueStats?.totalAmount ?? data.overduePayouts.reduce((s, p) => s + (p.expectedAmount - (p.paidAmount || 0)), 0);
+  const dueTodayCount = data.dueTodayStats?.count ?? data.dueTodayPayouts.length;
+  const dueTodayAmount = data.dueTodayStats?.totalAmount ?? data.dueTodayPayouts.reduce((s, p) => s + (p.expectedAmount - (p.paidAmount || 0)), 0);
+  const upcomingCount = data.upcomingStats?.count ?? data.upcomingPayouts.length;
+  const upcomingAmount = data.upcomingStats?.totalAmount ?? data.upcomingPayouts.reduce((s, p) => s + (p.expectedAmount - (p.paidAmount || 0)), 0);
 
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
@@ -120,7 +129,7 @@ export default function DashboardClientView({ data }: { data: DashboardData }) {
 
   // Process monthly data for area chart
   const monthlyData = Array.from({ length: 12 }, (_, i) => {
-    const monthLabel = format(new Date(2026, i, 1), 'MMM');
+    const monthLabel = format(new Date(new Date().getFullYear(), i, 1), 'MMM');
     return { month: monthLabel, Expected: 0, Paid: 0 };
   });
 
@@ -169,11 +178,11 @@ export default function DashboardClientView({ data }: { data: DashboardData }) {
       </div>
 
       {/* Overdue Alert */}
-      {data.overduePayouts.length > 0 && (
+      {overdueCount > 0 && (
         <div className="alert alert-danger" style={{ marginBottom: '24px' }}>
           <AlertCircle size={18} />
           <span>
-            <strong>{data.overduePayouts.length} overdue payout{data.overduePayouts.length > 1 ? 's' : ''}</strong> totalling <strong>{formatCurrency(overdueAmount)}</strong> require immediate attention.
+            <strong>{overdueCount} overdue payout{overdueCount > 1 ? 's' : ''}</strong> totalling <strong>{formatCurrency(overdueAmount)}</strong> require immediate attention.
           </span>
           <Link href="/dashboard/payouts?filter=overdue" style={{ marginLeft: 'auto', color: '#fca5a5', textDecoration: 'none', fontSize: '0.85rem', whiteSpace: 'nowrap', fontWeight: 600 }}>
             View all →
@@ -210,7 +219,7 @@ export default function DashboardClientView({ data }: { data: DashboardData }) {
           <div className="glass-card" style={{ padding: '20px', borderColor: 'rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.05)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#f87171' }}>{data.overduePayouts.length}</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#f87171' }}>{overdueCount}</div>
                 <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>Overdue</div>
                 <div style={{ fontSize: '0.75rem', color: '#f87171', marginTop: '4px' }}>{formatCurrency(overdueAmount)}</div>
               </div>
@@ -223,7 +232,7 @@ export default function DashboardClientView({ data }: { data: DashboardData }) {
           <div className="glass-card" style={{ padding: '20px', borderColor: 'rgba(245,158,11,0.2)', background: 'rgba(245,158,11,0.05)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fbbf24' }}>{data.dueTodayPayouts.length}</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fbbf24' }}>{dueTodayCount}</div>
                 <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>Due Today</div>
                 <div style={{ fontSize: '0.75rem', color: '#fbbf24', marginTop: '4px' }}>{formatCurrency(dueTodayAmount)}</div>
               </div>
@@ -236,10 +245,10 @@ export default function DashboardClientView({ data }: { data: DashboardData }) {
           <div className="glass-card" style={{ padding: '20px', borderColor: 'rgba(99,102,241,0.2)', background: 'rgba(99,102,241,0.05)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#a5b4fc' }}>{data.upcomingPayouts.length}</div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#a5b4fc' }}>{upcomingCount}</div>
                 <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>Next 7 Days</div>
                 <div style={{ fontSize: '0.75rem', color: '#a5b4fc', marginTop: '4px' }}>
-                  {formatCurrency(data.upcomingPayouts.reduce((s, p) => s + (p.expectedAmount - (p.paidAmount || 0)), 0))}
+                  {formatCurrency(upcomingAmount)}
                 </div>
               </div>
               <Calendar size={32} color="#a5b4fc" opacity={0.6} />

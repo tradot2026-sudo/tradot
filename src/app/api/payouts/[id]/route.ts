@@ -31,7 +31,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         paymentDate: null,
         modeOfPayment: null,
         referenceNo: null,
-        notes: null,
+        // Preserve existing notes — only clear payment-related fields
         status: 'pending',
       },
     });
@@ -84,7 +84,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const updates: { id: string; paidAmount: number; status: string; notes: string | null }[] = [];
   let overflow = inputPaidAmount;
-  let firstUpdated = true;
 
   for (let i = 0; i < allPayouts.length; i++) {
     const p = allPayouts[i];
@@ -94,8 +93,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const balance = p.expectedAmount - (p.paidAmount || 0);
       if (balance <= 0) continue;
 
-      const currentNotes = firstUpdated ? notes : `Rollover from payout #${payout.payoutNumber || ''}`;
-      firstUpdated = false;
+      // User's notes go on the payout they selected; other payouts get allocation notes
+      const isSelectedPayout = p.id === id;
+      const currentNotes = isSelectedPayout
+        ? notes
+        : (i < selectedIndex
+          ? `FIFO allocation from payout #${payout.payoutNumber || ''}`
+          : `Rollover from payout #${payout.payoutNumber || ''}`);
 
       if (overflow >= balance) {
         // Fully satisfy this payout
