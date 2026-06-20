@@ -612,16 +612,14 @@ export default function PlanDetailPage() {
               <th>Expected</th>
               <th>Paid</th>
               <th>Balance</th>
-              <th>Payment Date</th>
-              <th>Mode</th>
-              <th>Reference</th>
+              <th>Payment Details</th>
               <th>Status</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
             {filteredPayouts.length === 0 ? (
-              <tr><td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.3)' }}>No payouts in this filter</td></tr>
+              <tr><td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.3)' }}>No payouts in this filter</td></tr>
             ) : filteredPayouts.map((payout) => {
               const balance = payout.expectedAmount - (payout.paidAmount || 0);
               const isPaid = payout.status === 'paid';
@@ -644,10 +642,14 @@ export default function PlanDetailPage() {
                   <td style={{ color: balance > 0 ? '#f59e0b' : '#10b981', fontWeight: 600 }}>
                     {balance > 0 ? formatCurrency(balance) : '✓'}
                   </td>
-                  <td style={{ fontSize: '0.85rem' }}>
+                  <td>
                     {payout.paymentDate ? (
                       <>
-                        <div style={{ color: 'rgba(255,255,255,0.7)' }}>{formatDate(payout.paymentDate)}</div>
+                        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', fontWeight: 500 }}>{formatDate(payout.paymentDate)}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>
+                          {payout.modeOfPayment ? getPaymentModeLabel(payout.modeOfPayment) : '—'}
+                          {payout.referenceNo ? ` (${payout.referenceNo})` : ''}
+                        </div>
                         <div style={{
                           fontSize: '0.7rem',
                           color: calculateDelayDays(payout.dueDate, payout.paymentDate) > 0 ? '#fb923c' : '#34d399',
@@ -663,7 +665,17 @@ export default function PlanDetailPage() {
 
                     {/* Transaction history log */}
                     {(payout as any).transactions && (payout as any).transactions.length > 0 && (
-                      <div style={{ marginTop: '8px', padding: '6px 8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px', fontSize: '0.7rem', width: 'max-content' }}>
+                      <div style={{ 
+                        marginTop: '8px', 
+                        padding: '6px 8px', 
+                        background: 'rgba(255,255,255,0.02)', 
+                        border: '1px solid rgba(255,255,255,0.05)', 
+                        borderRadius: '6px', 
+                        fontSize: '0.7rem', 
+                        maxWidth: '220px',
+                        whiteSpace: 'normal',
+                        wordBreak: 'break-word'
+                      }}>
                         <div style={{ fontWeight: 600, color: 'rgba(255,255,255,0.4)', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '3px', marginBottom: '3px' }}>Ledger logs:</div>
                         {(payout as any).transactions.map((tx: any) => (
                           <div key={tx.id} style={{ color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>
@@ -672,12 +684,6 @@ export default function PlanDetailPage() {
                         ))}
                       </div>
                     )}
-                  </td>
-                  <td style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>
-                    {payout.modeOfPayment ? getPaymentModeLabel(payout.modeOfPayment) : '—'}
-                  </td>
-                  <td style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem' }}>
-                    {payout.referenceNo || '—'}
                   </td>
                   <td>{getStatusBadge(payout)}</td>
                   <td>
